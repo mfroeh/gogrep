@@ -1,5 +1,11 @@
 package main
 
+import "math"
+
+var quantifierOptional = &quantifier{Min: 0, Max: 1}
+var quantifierPlus = &quantifier{Min: 1, Max: math.MaxInt}
+var quantifierMul = &quantifier{Min: 0, Max: math.MaxInt}
+
 // {m,n} : {m, n}
 // ? : {0, 1}
 // * : {0, infty}
@@ -15,10 +21,6 @@ type astNode interface {
 	//match(s string) int
 }
 
-type root struct {
-	children astNode
-}
-
 // ()
 type group struct {
 	Children   []astNode
@@ -26,8 +28,8 @@ type group struct {
 }
 
 // |
-type choice struct {
-	choices [][]astNode
+type choices struct {
+	Choices [][]astNode
 }
 
 // []

@@ -6,19 +6,259 @@ import (
 	"testing"
 )
 
-func TestParseChoices(t *testing.T) {
-	/*	tests := map[string]struct {
-			givenStr     string
-			wantChoices  choice
-			wantConsumed int
-		}{
-			"happy two literal choices": {
-				givenStr:    "abc|def",
-				wantChoices: choice{choices: []astNode{}},
+func TestParse(t *testing.T) {
+	tests := map[string]struct {
+		givenStr     string
+		wantNode     astNode
+		wantConsumed int
+	}{
+		"(^.*a.*$)": {
+			givenStr: "(^.*a.*$)",
+			wantNode: &group{
+				Children: []astNode{
+					char{Char: '^'},
+					char{Char: '.', Quantifier: quantifierMul},
+					char{Char: 'a'},
+					char{Char: '.', Quantifier: quantifierMul},
+					char{Char: '$'},
+				},
 			},
-		}
+			wantConsumed: 9,
+		},
+		"(^[^x]*x+$)": {
+			givenStr: "(^[^x]*x+$)",
+			wantNode: &group{
+				Children: []astNode{
+					char{Char: '^'},
+					&bracket{
+						Negate:     true,
+						Chars:      []byte{'x'},
+						Quantifier: quantifierMul,
+					},
+					char{Char: 'x', Quantifier: quantifierPlus},
+					char{Char: '$'},
+				},
+			},
+			wantConsumed: 11,
+		},
+		"((ab|a)c)": {
+			givenStr: "((ab|a)|c)",
+			wantNode: &group{
+				Children: []astNode{
+					&choices{
+						Choices: [][]astNode{
+							{
+								&group{
+									Children: []astNode{
+										&choices{
+											Choices: [][]astNode{
+												{
+													char{Char: 'a'},
+													char{Char: 'b'},
+												},
+												{
+													char{Char: 'a'},
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								char{Char: 'c'},
+							},
+						},
+					},
+				},
+			},
+			wantConsumed: 10,
+		},
+		"complex": {
+			givenStr: "(^([A-Za-z]+|[0-9]{3,5})([_.-][^0-9 ]?)*([A-Za-z0-9_]{2,2}|[0-9]+)$)",
+			wantNode: &group{
+				Children: []astNode{
+					char{Char: '^'},
+					&group{
+						Children: []astNode{
+							&choices{
+								Choices: [][]astNode{
+									{
+										&bracket{
+											Negate: false,
+											Ranges: []charRange{
+												{From: 'A', To: 'Z'},
+												{From: 'a', To: 'z'},
+											},
+											Quantifier: quantifierPlus,
+										},
+									},
+									{
+										&bracket{
+											Negate: false,
+											Ranges: []charRange{
+												{From: '0', To: '9'},
+											},
+											Quantifier: &quantifier{Min: 3, Max: 5},
+										},
+									},
+								},
+							},
+						},
+					},
+					&group{
+						Quantifier: quantifierMul,
+						Children: []astNode{
+							&bracket{
+								Chars: []byte{'_', '.', '-'},
+							},
+							&bracket{
+								Negate:     true,
+								Chars:      []byte{' '},
+								Ranges:     []charRange{{From: '0', To: '9'}},
+								Quantifier: quantifierOptional,
+							},
+						},
+					},
+					&group{
+						Children: []astNode{
+							&choices{
+								Choices: [][]astNode{
+									{
+										&bracket{
+											Chars: []byte{'_'},
+											Ranges: []charRange{
+												{From: 'A', To: 'Z'},
+												{From: 'a', To: 'z'},
+												{From: '0', To: '9'},
+											},
+											Quantifier: &quantifier{Min: 2, Max: 2},
+										},
+									},
+									{
+										&bracket{
+											Ranges:     []charRange{{From: '0', To: '9'}},
+											Quantifier: quantifierPlus,
+										},
+									},
+								},
+							},
+						},
+					},
+					char{Char: '$'},
+				},
+			},
+			wantConsumed: 68,
+		},
+	}
 
-		_ = tests*/
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			// when
+			gotNode, gotConsumed := parseGroup(tt.givenStr)
+
+			// then
+			if d := cmp.Diff(tt.wantNode, gotNode); d != "" {
+				t.Errorf("diff (-want +got):\n%s", d)
+			}
+
+			if d := cmp.Diff(tt.wantConsumed, gotConsumed); d != "" {
+				t.Errorf("consumed diff (-want +got):\n%s", d)
+			}
+		})
+	}
+}
+
+func TestParseChoices(t *testing.T) {
+	tests := map[string]struct {
+		givenStr     string
+		wantChoices  *choices
+		wantConsumed int
+	}{
+		"happy two literal Choices": {
+			givenStr: "abc|def",
+			wantChoices: &choices{
+				Choices: [][]astNode{
+					{
+						char{Char: 'a'},
+						char{Char: 'b'},
+						char{Char: 'c'},
+					},
+					{
+						char{Char: 'd'},
+						char{Char: 'e'},
+						char{Char: 'f'},
+					},
+				},
+			},
+			wantConsumed: 7,
+		},
+		"happy three choices": {
+			givenStr: "abc|def|a*b",
+			wantChoices: &choices{
+				Choices: [][]astNode{
+					{
+						char{Char: 'a'},
+						char{Char: 'b'},
+						char{Char: 'c'},
+					},
+					{
+						char{Char: 'd'},
+						char{Char: 'e'},
+						char{Char: 'f'},
+					},
+					{
+						char{Char: 'a', Quantifier: &quantifier{Min: 0, Max: math.MaxInt}},
+						char{Char: 'b'},
+					},
+				},
+			},
+			wantConsumed: 11,
+		},
+		"happy nested choices": {
+			givenStr: "(a|c)?|a*b",
+			wantChoices: &choices{
+				Choices: [][]astNode{
+					{
+						&group{
+							Children: []astNode{&choices{
+								Choices: [][]astNode{
+									{
+										char{Char: 'a'},
+									},
+									{
+										char{Char: 'c'},
+									},
+								},
+							},
+							},
+							Quantifier: &quantifier{Min: 0, Max: 1},
+						},
+					},
+					{
+						char{Char: 'a', Quantifier: &quantifier{Min: 0, Max: math.MaxInt}},
+						char{Char: 'b'},
+					},
+				},
+			},
+			wantConsumed: 10,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			// when
+			gotChoices, gotConsumed := parseChoices(tt.givenStr)
+
+			// then
+			if d := cmp.Diff(tt.wantChoices, gotChoices); d != "" {
+				t.Errorf("diff (-want +got):\n%s", d)
+			}
+
+			if d := cmp.Diff(tt.wantConsumed, gotConsumed); d != "" {
+				t.Errorf("consumed diff (-want +got):\n%s", d)
+			}
+		})
+	}
 }
 
 func TestParseGroup(t *testing.T) {

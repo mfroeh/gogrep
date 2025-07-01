@@ -4,15 +4,19 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
-func pointTo[T any](val T) *T {
-	return &val
-}
-
-func parse(re string) (astNode, int) {
+func parse(re string, fromChoice bool) (astNode, int) {
 	if len(re) == 0 {
 		return nil, 0
+	}
+
+	if !fromChoice {
+		choices, cons := parseChoices(re)
+		if cons != 0 {
+			return choices, cons
+		}
 	}
 
 	group, cons := parseGroup(re)
@@ -29,17 +33,17 @@ func parse(re string) (astNode, int) {
 }
 
 // ...|...|...
-func parseChoice(re string) (*choice, int) {
+func parseChoices(re string) (*choices, int) {
 	if len(re) == 0 {
 		return nil, 0
 	}
 
-	var choices [][]astNode
+	var cs [][]astNode
 
 	var children []astNode
 	consumed := 0
-	for {
-		c, cons := parse(re)
+	for len(re) > 0 {
+		c, cons := parse(re, true)
 		if cons == 0 {
 			break
 		}
@@ -47,26 +51,26 @@ func parseChoice(re string) (*choice, int) {
 		children = append(children, c)
 		consumed += cons
 
-		if re[0] == '|' {
+		if len(re) > 0 && re[0] == '|' {
 			consumed += 1
 			re = re[1:]
-			choices = append(choices, children)
+			cs = append(cs, children)
 			children = nil
 		}
 	}
 
 	if children != nil {
-		choices = append(choices, children)
+		cs = append(cs, children)
 	}
 
-	// if we parsed just one, we are not a choice
-	if len(choices) == 0 {
+	// if we parsed just one, we are not a choices
+	if len(cs) == 1 {
 		return nil, 0
 	}
-	return &choice{choices: choices}, consumed
+	return &choices{Choices: cs}, consumed
 }
 
-// (...) or just any grouping without capturing (no parentheses)
+// (...)
 func parseGroup(re string) (*group, int) {
 	if len(re) == 0 || re[0] != '(' {
 		return nil, 0
@@ -78,7 +82,7 @@ func parseGroup(re string) (*group, int) {
 
 	var children []astNode
 	for {
-		child, cons := parse(re)
+		child, cons := parse(re, false)
 		if cons == 0 {
 			break
 		}
@@ -131,7 +135,9 @@ func parseBracket(re string) (*bracket, int) {
 
 		// reduce
 		if len(queue) == 3 {
-			if queue[1] == '-' {
+			if queue[1] == '-' &&
+				(unicode.IsLetter(rune(queue[0])) || unicode.IsDigit(rune(queue[0]))) &&
+				(unicode.IsLetter(rune(queue[2])) || unicode.IsDigit(rune(queue[2]))) {
 				charRange := charRange{
 					From: queue[0],
 					To:   r,
@@ -261,8 +267,11 @@ func parseChar(re string) (char, int) {
 	}
 
 	// don't consume non-escaped meta characters
-	switch rune(re[0]) {
-	case '(', ')', '{', '}', '[', ']', '|':
+	switch re[0] {
+	case '^', '$':
+		// these don't work with quantifiers
+		return char{Char: re[0]}, 1
+	case '(', ')', '{', '}', '[', ']', '|', '?', '+', '*':
 		return char{}, 0
 	}
 
