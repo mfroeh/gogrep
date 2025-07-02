@@ -171,7 +171,6 @@ type char struct {
 	Quantifier *quantifier
 }
 
-// todo: ^ and $ handling
 func (c char) match(s string, offsets []int) []int {
 	if len(offsets) == 0 {
 		log.Fatalln("got 0 offsets")

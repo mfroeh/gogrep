@@ -50,7 +50,7 @@ func TestMatch(t *testing.T) {
 			},
 		},
 		"ere_complex_id_tag": {
-			givenRe: "(ID|REF)(_?(ALPHA|BETA|[0-9]{2,4}))([_.-][A-Za-z]{3}|[0-9]+)*X{1,2}",
+			givenRe: "^(ID|REF)(_?(ALPHA|BETA|[0-9]{2,4}))([_.-][A-Za-z]{3}|[0-9]+)*X{1,2}$",
 			givenStrings: []string{
 				"IDALPHAXX",                // Basic, no underscore, no repeated group
 				"REF_BETA_xyzX",            // Underscore, one repeated group with letters
@@ -130,6 +130,46 @@ func TestMatch(t *testing.T) {
 				"..", // Matches `[.]` then `\.?`
 				"z.", // Matches `[a-z]` then `\.?`
 				"y",  // Matches `[a-z]`
+			},
+		}, "ere_anchor_strict_enum": {
+			givenRe: `^(YES|NO)$`,
+			givenStrings: []string{
+				"YES", // Exact match
+				"NO",  // Exact match
+			},
+		},
+		"ere_anchor_optional_ends": {
+			givenRe: `^A?[0-9]+Z?$`,
+			givenStrings: []string{
+				"123",   // Only core digits
+				"A123",  // Leading optional 'A'
+				"123Z",  // Trailing optional 'Z'
+				"A123Z", // Both optional parts
+				"A0Z",   // Single digit case
+			},
+		},
+		"ere_anchor_any_between": {
+			givenRe: `^X.*Y$`,
+			givenStrings: []string{
+				"XY",         // Minimum match (.* matches empty string)
+				"X_Y",        // Any single character between
+				"XabcY",      // Multiple characters between
+				"X123_abc_Y", // Diverse characters between
+				"X.Y",        // Dot metacharacter matching
+				"X     Y",    // Spaces between
+			},
+		},
+		"ere_anchor_negated_full_string": {
+			givenRe: `^[^0-9]+$`,
+			givenStrings: []string{
+				"abc",             // All letters
+				"ABC",             // All uppercase
+				"!@#$",            // All special chars
+				"abc!@#$",         // Mix of letters and special chars
+				"Spaces and tabs", // With spaces
+				"A",               // Single char
+				"0AA",             // should not match (does not start with 0)
+				"ABC0",            // should not match (does not end with [^0-9])
 			},
 		},
 	}
