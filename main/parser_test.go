@@ -73,6 +73,30 @@ func TestParse(t *testing.T) {
 			},
 			wantConsumed: 10,
 		},
+		"(ab|a)c": {
+			givenStr: "((ab|a)c)",
+			wantNode: &group{
+				Children: []astNode{
+					&group{
+						Children: []astNode{
+							&choices{
+								Choices: [][]astNode{
+									{
+										char{Char: 'a'},
+										char{Char: 'b'},
+									},
+									{
+										char{Char: 'a'},
+									},
+								},
+							},
+						},
+					},
+					char{Char: 'c'},
+				},
+			},
+			wantConsumed: 9,
+		},
 		"complex": {
 			givenStr: "(^([A-Za-z]+|[0-9]{3,5})([_.-][^0-9 ]?)*([A-Za-z0-9_]{2,2}|[0-9]+)$)",
 			wantNode: &group{
@@ -564,15 +588,28 @@ func TestParseQuantifier(t *testing.T) {
 			},
 			wantConsumed: 7,
 		},
+		"happy {m} 1": {
+			givenStr: "{33}abc",
+			wantQuantifer: &quantifier{
+				Min: 33,
+				Max: 33,
+			},
+			wantConsumed: 4,
+		},
+		"happy {m} 2": {
+			givenStr: "{3}abc",
+			wantQuantifer: &quantifier{
+				Min: 3,
+				Max: 3,
+			},
+			wantConsumed: 3,
+		},
 		"dont parse if not a number {m,n}": {
 			givenStr:      "{33,34a}abc",
 			wantQuantifer: nil,
 		},
 		"dont parse if too few numbers {m,n} 1": {
 			givenStr: "{33,}abc",
-		},
-		"dont parse if too few numbers {m,n} 2": {
-			givenStr: "{33}abc",
 		},
 		"dont parse if too few numbers {m,n} 3": {
 			givenStr: "{,}abc",

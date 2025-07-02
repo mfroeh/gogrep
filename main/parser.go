@@ -216,39 +216,34 @@ func parseQuantifier(re string) (*quantifier, int) {
 		return nil, 0
 	}
 
-	// pop off '{'
-	consumed := 1
-	re = re[1:]
-
-	numStrs := strings.SplitN(re, ",", 2)
-	if len(numStrs) != 2 {
+	endIdx := strings.Index(re, "}")
+	if endIdx == -1 {
 		return nil, 0
 	}
+	// inside '{...}'
+	re = re[1:endIdx]
+
+	numStrs := strings.SplitN(re, ",", 2)
 
 	occMin, err := strconv.Atoi(numStrs[0])
 	if err != nil {
 		return nil, 0
 	}
 
-	// consume first num and ','
-	consumed += len(numStrs[0]) + 1
-
-	endIdx := strings.Index(numStrs[1], "}")
-	if endIdx == -1 {
-		return nil, 0
+	if len(numStrs) == 1 {
+		return &quantifier{Min: occMin, Max: occMin}, 1 + endIdx
 	}
 
-	occMax, err := strconv.Atoi(numStrs[1][:endIdx])
+	occMax, err := strconv.Atoi(numStrs[1])
 	if err != nil {
 		return nil, 0
 	}
 
 	// consume lastNum and }
-	consumed += endIdx + 1
 	return &quantifier{
 		Min: occMin,
 		Max: occMax,
-	}, consumed
+	}, 1 + endIdx
 }
 
 func parseChar(re string) (char, int) {
