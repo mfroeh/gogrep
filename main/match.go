@@ -98,7 +98,7 @@ func (c *choices) match(s string, offsets []int) []int {
 		}
 	}
 
-	slices.Reverse(matches)
+	slices.Reverse(removeDuplicates(matches))
 	return matches
 }
 
@@ -152,7 +152,7 @@ func (b *bracket) match(s string, offsets []int) []int {
 		}
 	}
 
-	slices.Reverse(matches)
+	slices.Reverse(removeDuplicates(matches))
 	return matches
 }
 
@@ -202,6 +202,18 @@ func (c char) match(s string, offsets []int) []int {
 		}
 	}
 
-	slices.Reverse(matches)
+	slices.Reverse(removeDuplicates(matches))
 	return matches
+}
+
+func removeDuplicates[T comparable](slice []T) []T {
+	seen := map[T]struct{}{}
+	filtered := make([]T, 0)
+	for _, e := range slice {
+		if _, ok := seen[e]; ok {
+			filtered = append(filtered, e)
+		}
+		seen[e] = struct{}{}
+	}
+	return filtered
 }
