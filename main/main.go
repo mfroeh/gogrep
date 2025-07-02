@@ -44,5 +44,14 @@ func Match(re string, s string) (bool, error) {
 }
 
 func main() {
+	// missing and I want to add:
+	// fill capture groups to enable find/replace
+	// support POSIX char sets (e.g. \d and \D)
+	// build a small GREP tool on top of this library
+	// multiline support (in particular with $)
+	// find all matches, replace all matches
+	// potentially: unicode support
+	// potentially: more than just ERE support, e.g. non-greedy (lazy) quantifier variants like .+?
+	// potentially: look ahead/look behind
 	println("Hello World")
 }

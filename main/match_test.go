@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"regexp"
 	"testing"
 
@@ -206,7 +205,6 @@ func TestMatch(t *testing.T) {
 			if d := cmp.Diff(wantResults, gotResults); d != "" {
 				t.Errorf("got diff (-want +got):\n%s", d)
 			}
-			fmt.Println(gotResults)
 		})
 	}
 }
