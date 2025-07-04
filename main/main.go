@@ -41,8 +41,19 @@ func Compile(re string) (Regex, error) {
 	}, nil
 }
 
-func (re Regex) FindSubmatch(s string) []Submatch {
+// FindAllSubmatches finds up to maxCount submatches of the pattern in the given string
+// To return all submatches pass a maxCount of -1
+func (re Regex) FindAllSubmatches(s string, maxCount int) [][]Submatch {
+	var allSubmatches [][]Submatch
 	for i := range s {
+		if maxCount != -1 && len(allSubmatches) >= maxCount {
+			return allSubmatches
+		}
+
+		if re.strictStart && (i != 0 && (s[i-1] != '\n')) {
+			continue
+		}
+
 		_, match := re.root.match(s[i:], 0, 0)
 		if match {
 			var submatches []Submatch
@@ -50,16 +61,25 @@ func (re Regex) FindSubmatch(s string) []Submatch {
 			for j := range submatches {
 				submatches[j].Offset += i
 			}
-			if !re.strictEnd || len(submatches[0].Str) == len(s[i:]) {
-				return submatches
+			rootMatchStr := submatches[0].Str
+			if !re.strictEnd ||
+				// end of input string
+				len(rootMatchStr) == len(s[i:]) ||
+				// newline right after
+				(len(rootMatchStr)+1 < len(s) && s[len(rootMatchStr)+1] == '\n') {
+				allSubmatches = append(allSubmatches, submatches)
 			}
 		}
-
-		if re.strictStart == true {
-			break
-		}
 	}
-	return nil
+	return allSubmatches
+}
+
+func (re Regex) FindSubmatch(s string) []Submatch {
+	submatch := re.FindAllSubmatches(s, 1)
+	if len(submatch) < 1 {
+		return nil
+	}
+	return submatch[0]
 }
 
 func (re Regex) Match(s string) bool {
@@ -90,7 +110,6 @@ func (re Regex) Replace(s string, with string) string {
 
 func main() {
 	// missing and I want to add:
-	// fill capture groups to enable find/replace
 	// support POSIX char sets (e.g. \d and \D)
 	// build a small GREP tool on top of this library
 	// multiline support (in particular with $)
