@@ -214,3 +214,41 @@ func TestFindSubmatch(t *testing.T) {
 		})
 	}
 }
+
+func TestReplace(t *testing.T) {
+	tests := map[string]struct {
+		givenRe      string
+		givenStr     string
+		givenReplace string
+		wantReplaced string
+	}{
+		"complex, many replace": {
+			givenRe:      `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^]]+\])?`,
+			givenStr:     "01:02:03_ERROR Critical Error [ID:999]",
+			givenReplace: "I$3reversed$2them$1hihi$0",
+			wantReplaced: "I" + "[ID:999]" + "reversed" + "Critical Error " + "them" + "_ERROR" + "hihi" + "01:02:03_ERROR Critical Error [ID:999]",
+		},
+		"complex, replace with empty string if group not matched": {
+			givenRe:      `(aa)b?`,
+			givenStr:     "aab",
+			givenReplace: "$0$2",
+			wantReplaced: "aab",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			// when
+			re, gotErr := Compile(tt.givenRe)
+			if gotErr != nil {
+				t.Fatalf("our Compile: %v", gotErr)
+			}
+			gotReplaced := re.Replace(tt.givenStr, tt.givenReplace)
+
+			// then
+			if d := cmp.Diff(tt.wantReplaced, gotReplaced); d != "" {
+				t.Errorf("got diff (-want +got):\n%s", d)
+			}
+		})
+	}
+}

@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+	"unicode"
+)
 
 type Regex struct {
 	root        *node
@@ -63,7 +67,25 @@ func (re Regex) Match(s string) bool {
 }
 
 func (re Regex) Replace(s string, with string) string {
-	return ""
+	submatches := re.FindSubmatch(s)
+	out := strings.Builder{}
+	for i := 0; i < len(with); i++ {
+		if with[i] == '$' && i+1 < len(with) && unicode.IsDigit(rune(with[i+1])) {
+			num := 0
+			for j := i + 1; j < len(with) && unicode.IsDigit(rune(with[j])); j++ {
+				num *= 10
+				num += int(with[j] - '0')
+				i++
+			}
+
+			if num < len(submatches) {
+				out.WriteString(submatches[num].Str)
+			}
+		} else {
+			out.WriteByte(with[i])
+		}
+	}
+	return out.String()
 }
 
 func main() {
