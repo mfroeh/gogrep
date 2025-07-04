@@ -6,6 +6,8 @@ import (
 	"slices"
 )
 
+const wildcardChar = 0
+
 type charState struct {
 	char byte
 }
@@ -21,6 +23,8 @@ type choiceState struct {
 
 type groupState struct {
 	firstChild *node
+	matchStart int
+	matchEnd   int
 }
 
 type node struct {
@@ -51,7 +55,7 @@ func (n *node) match(in string, i, r int) (int, bool) {
 			return n.next.match(in, i, 0)
 		}
 
-		if in[i] == s.char || s.char == '.' {
+		if in[i] == s.char || s.char == wildcardChar {
 			j++
 			matchFound = true
 		}
@@ -82,6 +86,10 @@ func (n *node) match(in string, i, r int) (int, bool) {
 		return i, false
 	case *groupState:
 		j, matchFound = s.firstChild.match(in, i, 0)
+		if matchFound {
+			s.matchStart = i
+			s.matchEnd = j
+		}
 	default:
 		panic("unexpected `state` type")
 	}
@@ -110,6 +118,25 @@ func (n *node) match(in string, i, r int) (int, bool) {
 	}
 
 	return i, false
+}
+
+func (n *node) collectSubmatches(in string, submatches []string) []string {
+	if n == nil {
+		return submatches
+	}
+
+	switch s := n.state.(type) {
+	case *groupState:
+		submatches = append(submatches, in[s.matchStart:s.matchEnd])
+		submatches = s.firstChild.collectSubmatches(in, submatches)
+	case *choiceState:
+		for _, c := range s.choices {
+			submatches = c.collectSubmatches(in, submatches)
+		}
+	}
+	submatches = n.next.collectSubmatches(in, submatches)
+
+	return submatches
 }
 
 type charRange struct {

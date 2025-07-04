@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-func Match(re string, s string) (bool, error) {
+func FindSubmatch(re string, s string) ([]string, error) {
 	strictStart := false
 	if len(re) > 0 && re[0] == '^' {
 		strictStart = true
@@ -14,28 +14,29 @@ func Match(re string, s string) (bool, error) {
 		strictEnd = true
 		re = re[:len(re)-1]
 	}
-	_ = strictEnd
 
 	reRoot, err := parseGroup("("+re+")", 0)
 	if err != nil {
-		return false, fmt.Errorf("failed to construct regex from %q: %w", "("+re+")", err)
+		return nil, fmt.Errorf("failed to construct regex from %q: %w", "("+re+")", err)
 	}
 
-	if strictStart {
-		_, match := reRoot.match(s, 0, 0)
-		if match {
-			return true, nil
-		}
-		return false, nil
-	}
-
+	submatches := make([]string, 0)
 	for i := range s {
-		_, match := reRoot.match(s[i:], 0, 0)
-		if match {
-			return true, nil
+		j, match := reRoot.match(s[i:], 0, 0)
+		if match && (!strictEnd || j == len(s)) {
+			return reRoot.collectSubmatches(s[i:], submatches), nil
+		}
+
+		if strictStart == true {
+			break
 		}
 	}
-	return false, nil
+	return nil, nil
+}
+
+func Match(re string, s string) (bool, error) {
+	submatches, err := FindSubmatch(re, s)
+	return len(submatches) > 0, err
 }
 
 func main() {

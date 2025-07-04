@@ -281,7 +281,7 @@ func parseChar(re string, i int) (*node, error) {
 				return nil, err
 			}
 			return &node{
-				state: &charState{char: re[i]},
+				state: &charState{char: re[i+1]},
 				mi:    mi,
 				ma:    ma,
 				str:   re[i : i+2+cons],
@@ -302,8 +302,14 @@ func parseChar(re string, i int) (*node, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// have to differentiate between literal '\.' and wildcard '.'
+	c := re[i]
+	if re[i] == '.' {
+		c = wildcardChar
+	}
 	return &node{
-		state: &charState{char: re[i]},
+		state: &charState{char: c},
 		mi:    mi,
 		ma:    ma,
 		str:   re[i : i+1+cons],

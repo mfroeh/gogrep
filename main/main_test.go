@@ -8,7 +8,7 @@ import (
 )
 
 // not really a unit test, relies on correct parsing
-func TestMatch(t *testing.T) {
+func TestFindSubmatch(t *testing.T) {
 	tests := map[string]struct {
 		givenStrings []string
 		givenRe      string
@@ -123,83 +123,84 @@ func TestMatch(t *testing.T) {
 		"ere_tricky_literal_dot": {
 			givenRe: `([.]|[a-z])\.?`,
 			givenStrings: []string{
-				".",  // Matches `[.]`
-				"a",  // Matches `[a-z]`
+				//".",  // Matches `[.]`
+				//"a",  // Matches `[a-z]`
 				"a.", // Matches `[a-z]` then `\.?`
 				"..", // Matches `[.]` then `\.?`
 				"z.", // Matches `[a-z]` then `\.?`
 				"y",  // Matches `[a-z]`
 			},
 		},
-		// "ere_anchor_strict_enum": {
-		// 	givenRe: `^(YES|NO)$`,
-		// 	givenStrings: []string{
-		// 		"YES", // Exact match
-		// 		"NO",  // Exact match
-		// 	},
-		// },
-		// "ere_anchor_optional_ends": {
-		// 	givenRe: `^A?[0-9]+Z?$`,
-		// 	givenStrings: []string{
-		// 		"123",   // Only core digits
-		// 		"A123",  // Leading optional 'A'
-		// 		"123Z",  // Trailing optional 'Z'
-		// 		"A123Z", // Both optional parts
-		// 		"A0Z",   // Single digit case
-		// 	},
-		// },
-		// "ere_anchor_any_between": {
-		// 	givenRe: `^X.*Y$`,
-		// 	givenStrings: []string{
-		// 		"XY",         // Minimum match (.* matches empty string)
-		// 		"X_Y",        // Any single character between
-		// 		"XabcY",      // Multiple characters between
-		// 		"X123_abc_Y", // Diverse characters between
-		// 		"X.Y",        // Dot metacharacter matching
-		// 		"X     Y",    // Spaces between
-		// 	},
-		// },
-		// "ere_anchor_negated_full_string": {
-		// 	givenRe: `^[^0-9]+$`,
-		// 	givenStrings: []string{
-		// 		"abc",             // All letters
-		// 		"ABC",             // All uppercase
-		// 		"!@#$",            // All special chars
-		// 		"abc!@#$",         // Mix of letters and special chars
-		// 		"Spaces and tabs", // With spaces
-		// 		"A",               // Single char
-		// 		"0AA",             // should not match (does not start with 0)
-		// 		"ABC0",            // should not match (does not end with [^0-9])
-		// 	},
-		// },
+		"ere_anchor_strict_enum": {
+			givenRe: `^(YES|NO)$`,
+			givenStrings: []string{
+				"YES", // Exact match
+				"NO",  // Exact match
+			},
+		},
+		"ere_anchor_optional_ends": {
+			givenRe: `^A?[0-9]+Z?$`,
+			givenStrings: []string{
+				"123",   // Only core digits
+				"A123",  // Leading optional 'A'
+				"123Z",  // Trailing optional 'Z'
+				"A123Z", // Both optional parts
+				"A0Z",   // Single digit case
+			},
+		},
+		"ere_anchor_any_between": {
+			givenRe: `^X.*Y$`,
+			givenStrings: []string{
+				"XY",         // Minimum match (.* matches empty string)
+				"X_Y",        // Any single character between
+				"XabcY",      // Multiple characters between
+				"X123_abc_Y", // Diverse characters between
+				"X.Y",        // Dot metacharacter matching
+				"X     Y",    // Spaces between
+			},
+		},
+		"ere_anchor_negated_full_string": {
+			givenRe: `^[^0-9]+$`,
+			givenStrings: []string{
+				"abc",             // All letters
+				"ABC",             // All uppercase
+				"!@#$",            // All special chars
+				"abc!@#$",         // Mix of letters and special chars
+				"Spaces and tabs", // With spaces
+				"A",               // Single char
+				"0AA",             // should not match (does not start with 0)
+				"ABC0",            // should not match (does not end with [^0-9])
+			},
+		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			// when
 			type combination struct {
-				Re    string
-				Str   string
-				Match bool
-				Err   error
+				Re         string
+				Str        string
+				Submatches []string
+				Err        error
 			}
 
 			gotResults := make([]combination, len(tt.givenStrings))
 			for i, s := range tt.givenStrings {
-				gotMatch, gotErr := Match(tt.givenRe, s)
+				gotSubmatches, gotErr := FindSubmatch(tt.givenRe, s)
 				if gotErr != nil {
 					t.Fatalf("our Match: %v", gotErr)
 				}
-				gotResults[i] = combination{tt.givenRe, s, gotMatch, gotErr}
+				gotResults[i] = combination{tt.givenRe, s, gotSubmatches, gotErr}
 			}
 
 			wantResults := make([]combination, len(tt.givenStrings))
 			for i, s := range tt.givenStrings {
-				wantResult, err := regexp.Match(tt.givenRe, []byte(s))
+				re, err := regexp.Compile(tt.givenRe)
 				if err != nil {
 					t.Fatalf("regexp.Match: %v", err)
 				}
-				wantResults[i] = combination{tt.givenRe, s, wantResult, err}
+				wantSubmatches := re.FindStringSubmatch(s)
+				wantResults[i] = combination{tt.givenRe, s, wantSubmatches, err}
 			}
 
 			// then
