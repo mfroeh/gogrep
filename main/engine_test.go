@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestMatchh(t *testing.T) {
+func TestMatchInternal(t *testing.T) {
 	tests := map[string]struct {
 		givenInput string
 		givenNode  *node
@@ -72,6 +72,8 @@ func TestMatchh(t *testing.T) {
 				mi: 1,
 				ma: 1,
 			},
+			wantAdv:   6,
+			wantMatch: true,
 		},
 	}
 

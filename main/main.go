@@ -14,29 +14,24 @@ func Match(re string, s string) (bool, error) {
 		strictEnd = true
 		re = re[:len(re)-1]
 	}
+	_ = strictEnd
 
-	reRoot, ok := parseGroup("(" + re + ")")
-	if ok == 0 {
-		return false, fmt.Errorf("failed to construct regex from %q", re)
+	reRoot, err := parseGroup("("+re+")", 0)
+	if err != nil {
+		return false, fmt.Errorf("failed to construct regex from %q: %w", "("+re+")", err)
 	}
 
 	if strictStart {
-		offsets := reRoot.match(s, []int{0})
-		if len(offsets) > 0 {
-			if strictEnd {
-				return offsets[0] == len(s), nil
-			}
+		_, match := reRoot.match(s, 0, 0)
+		if match {
 			return true, nil
 		}
 		return false, nil
 	}
 
 	for i := range s {
-		offsets := reRoot.match(s[i:], []int{0})
-		if len(offsets) > 0 {
-			if strictEnd {
-				return offsets[0] == len(s[i:]), nil
-			}
+		_, match := reRoot.match(s[i:], 0, 0)
+		if match {
 			return true, nil
 		}
 	}

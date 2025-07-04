@@ -1,137 +1,212 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"unicode"
 )
 
-func parse(re string, fromChoice bool) (astNode, int) {
-	if len(re) == 0 {
-		return nil, 0
+type parserError struct {
+	inner   error
+	message string
+}
+
+func (p parserError) Error() string {
+	return p.message
+}
+
+func newParserError(i int, str string, inner error) parserError {
+	return parserError{message: fmt.Sprintf("parser error at %d: %s", i, str), inner: inner}
+}
+
+func parse(re string, i int, fromChoice bool, prev *node) (*node, error) {
+	if i >= len(re) {
+		return nil, nil
 	}
 
 	if !fromChoice {
-		choices, cons := parseChoices(re)
-		if cons != 0 {
-			return choices, cons
+		choices, err := parseChoices(re, i)
+		if err != nil {
+			return nil, err
+		}
+		if choices != nil {
+			if prev != nil {
+				prev.next = choices
+			}
+			return choices, nil
 		}
 	}
 
-	group, cons := parseGroup(re)
-	if cons != 0 {
-		return group, cons
+	// group
+	group, err := parseGroup(re, i)
+	if err != nil {
+		return nil, err
+	}
+	if group != nil {
+		if prev != nil {
+			prev.next = group
+		}
+		return group, nil
 	}
 
-	bracket, cons := parseBracket(re)
-	if cons != 0 {
-		return bracket, cons
+	// bracket
+	bracket, err := parseBracket(re, i)
+	if err != nil {
+		return nil, err
+	}
+	if bracket != nil {
+		if prev != nil {
+			prev.next = bracket
+		}
+		return bracket, nil
 	}
 
-	return parseChar(re)
+	// char
+	char, err := parseChar(re, i)
+	if err != nil {
+		return nil, err
+	}
+	if char != nil {
+		if prev != nil {
+			prev.next = char
+		}
+		return char, nil
+	}
+	return nil, nil
 }
 
 // ...|...|...
-func parseChoices(re string) (*choices, int) {
-	if len(re) == 0 {
-		return nil, 0
+func parseChoices(re string, i int) (*node, error) {
+	if i >= len(re) {
+		return nil, nil
 	}
 
-	var cs [][]astNode
+	var choices []*node
 
-	var children []astNode
-	consumed := 0
-	for len(re) > 0 {
-		c, cons := parse(re, true)
-		if cons == 0 {
+	j := i
+	var firstChild *node
+	var prevChild *node
+	for j < len(re) {
+		child, err := parse(re, j, true, prevChild)
+		if err != nil {
+			return nil, err
+		}
+		if child == nil {
 			break
 		}
-		re = re[cons:]
-		children = append(children, c)
-		consumed += cons
+		j += len(child.str)
+		prevChild = child
+		if firstChild == nil {
+			firstChild = child
+		}
 
-		if len(re) > 0 && re[0] == '|' {
-			consumed += 1
-			re = re[1:]
-			cs = append(cs, children)
-			children = nil
+		if j <= len(re) && re[j] == '|' {
+			j += 1
+			choices = append(choices, firstChild)
+			firstChild = nil
+			prevChild = nil
 		}
 	}
 
-	if children != nil {
-		cs = append(cs, children)
+	if firstChild != nil {
+		choices = append(choices, firstChild)
 	}
 
-	// if we parsed just one, we are not a choices
-	if len(cs) == 1 {
-		return nil, 0
+	// if we parsed just one, we are not a choice
+	if len(choices) <= 1 {
+		return nil, nil
 	}
-	return &choices{Choices: cs}, consumed
+	return &node{
+		state: &choiceState{
+			choices: choices,
+		},
+		mi:  1,
+		ma:  1,
+		str: re[i:j],
+	}, nil
 }
 
 // (...)
-func parseGroup(re string) (*group, int) {
-	if len(re) == 0 || re[0] != '(' {
-		return nil, 0
+func parseGroup(re string, i int) (*node, error) {
+	if i >= len(re) || re[i] != '(' {
+		return nil, nil
 	}
 
 	// pop off '('
-	re = re[1:]
-	consumed := 1
+	j := i + 1
 
-	var children []astNode
-	for {
-		child, cons := parse(re, false)
-		if cons == 0 {
+	var firstChild *node
+	var prevChild *node
+	for j < len(re) && re[j] != ')' {
+		child, err := parse(re, j, false, prevChild)
+		if err != nil {
+			return nil, err
+		}
+		if child == nil {
 			break
 		}
-		consumed += cons
-		children = append(children, child)
-		re = re[cons:]
+		j += len(child.str)
+		prevChild = child
+		if firstChild == nil {
+			firstChild = child
+		}
 	}
 
-	if len(re) == 0 || re[0] != ')' {
-		return nil, 0
+	if j >= len(re) {
+		return nil, newParserError(j, "unexpected EOF", nil)
+	}
+
+	if re[j] != ')' {
+		return nil, newParserError(j, "did not find closing ')'", nil)
 	}
 
 	// pop off ')'
-	consumed += 1
+	j++
 
 	// see if there is a Quantifier
-	re = re[1:]
-	q, cons := parseQuantifier(re)
-	return &group{
-		Children:   children,
-		Quantifier: q,
-	}, consumed + cons
+	mi, ma, cons, err := parseQuantifier(re, j)
+	if err != nil {
+		return nil, err
+	}
+	return &node{
+		state: &groupState{
+			firstChild: firstChild,
+		},
+		mi:  mi,
+		ma:  ma,
+		str: re[i : j+cons],
+	}, nil
 }
 
+// todo: make this more sensible
 // [...] and [^...]
-func parseBracket(re string) (*bracket, int) {
-	if len(re) < 2 || re[0] != '[' {
-		return nil, 0
+func parseBracket(re string, i int) (*node, error) {
+	if i >= len(re) {
+		return nil, nil
+	}
+
+	if re[i] != '[' {
+		return nil, nil
 	}
 
 	// pop off '['
-	consumed := 1
-	re = re[1:]
+	j := i + 1
 
-	negate := re[0] == '^'
+	negate := re[j] == '^'
 	if negate {
-		consumed += 1
-		re = re[1:]
+		j++
 	}
 
 	var chars []byte
 	var ranges []charRange
 
 	var queue []byte
-	for len(re) > 0 {
-		r := re[0]
+	for j < len(re) {
+		r := re[j]
 		queue = append(queue, r)
-		consumed += 1
-		re = re[1:]
+		j++
 
 		// reduce
 		if len(queue) == 3 {
@@ -139,8 +214,8 @@ func parseBracket(re string) (*bracket, int) {
 				(unicode.IsLetter(rune(queue[0])) || unicode.IsDigit(rune(queue[0]))) &&
 				(unicode.IsLetter(rune(queue[2])) || unicode.IsDigit(rune(queue[2]))) {
 				charRange := charRange{
-					From: queue[0],
-					To:   r,
+					from: queue[0],
+					to:   r,
 				}
 				ranges = append(ranges, charRange)
 				queue = nil
@@ -151,7 +226,7 @@ func parseBracket(re string) (*bracket, int) {
 		}
 
 		// allow []...] or [^]...]
-		if r == ']' && !(consumed == 2 || consumed == 3 && negate) {
+		if r == ']' && !(j == i+2 || j == i+3 && negate) {
 			break
 		}
 	}
@@ -163,63 +238,103 @@ func parseBracket(re string) (*bracket, int) {
 	if chars[len(chars)-1] != ']' {
 		if chars[0] == ']' {
 			chars = nil
-			consumed = 2
+			j = i + 2
 			if negate {
-				consumed += 1
+				j++
 			}
 		} else {
-			return nil, 0
+			return nil, newParserError(i, "did not find closing ']'", nil)
 		}
 	} else {
 		chars = chars[:len(chars)-1]
 	}
 
-	if len(chars) == 0 {
-		chars = nil
+	for _, c := range chars {
+		ranges = append(ranges, charRange{from: c, to: c})
 	}
 
 	// see if there is a Quantifier
-	q, cons := parseQuantifier(re)
-	return &bracket{
-		Negate:     negate,
-		Ranges:     ranges,
-		Chars:      chars,
-		Quantifier: q,
-	}, consumed + cons
+	mi, ma, cons, err := parseQuantifier(re, j)
+	if err != nil {
+		return nil, err
+	}
+	return &node{
+		state: &bracketState{
+			negate: negate,
+			ranges: ranges,
+		},
+		mi:  mi,
+		ma:  ma,
+		str: re[i : j+cons],
+	}, nil
 }
 
-// {m,n} and ? and * and +
-func parseQuantifier(re string) (*quantifier, int) {
-	if len(re) == 0 {
-		return nil, 0
+func parseChar(re string, i int) (*node, error) {
+	if i >= len(re) {
+		return nil, nil
 	}
 
-	switch re[0] {
+	if re[i] == '\\' {
+		if i+1 < len(re) {
+			mi, ma, cons, err := parseQuantifier(re, i+2)
+			if err != nil {
+				return nil, err
+			}
+			return &node{
+				state: &charState{char: re[i]},
+				mi:    mi,
+				ma:    ma,
+				str:   re[i : i+2+cons],
+			}, nil
+		}
+		return nil, newParserError(i, "unexpected EOF", nil)
+	}
+
+	// don't consume non-escaped meta characters
+	switch re[i] {
+	case '^', '$':
+		return nil, newParserError(i, "unexpected meta character", nil)
+	case '(', ')', '{', '}', '[', ']', '|', '?', '+', '*':
+		return nil, nil
+	}
+
+	mi, ma, cons, err := parseQuantifier(re, i+1)
+	if err != nil {
+		return nil, err
+	}
+	return &node{
+		state: &charState{char: re[i]},
+		mi:    mi,
+		ma:    ma,
+		str:   re[i : i+1+cons],
+	}, nil
+}
+
+// {m, n} and ? and * and +
+func parseQuantifier(re string, i int) (mi int, ma int, consumed int, err error) {
+	if i >= len(re) {
+		return 1, 1, 0, nil
+	}
+
+	switch re[i] {
 	case '+':
-		return &quantifier{
-			Min: 1,
-			Max: math.MaxInt,
-		}, 1
+		return 1, math.MaxInt, 1, nil
 	case '?':
-		return &quantifier{
-			Min: 0,
-			Max: 1,
-		}, 1
+		return 0, 1, 1, nil
 	case '*':
-		return &quantifier{
-			Min: 0,
-			Max: math.MaxInt,
-		}, 1
+		return 0, math.MaxInt, 1, nil
 	}
 
-	if re[0] != '{' {
-		return nil, 0
+	if re[i] != '{' {
+		return 1, 1, 0, nil
 	}
 
+	re = re[i:]
 	endIdx := strings.Index(re, "}")
 	if endIdx == -1 {
-		return nil, 0
+		return 0, 0, 0, newParserError(i, "did not find closing '}'", nil)
 	}
+
 	// inside '{...}'
 	re = re[1:endIdx]
 
@@ -227,51 +342,17 @@ func parseQuantifier(re string) (*quantifier, int) {
 
 	occMin, err := strconv.Atoi(numStrs[0])
 	if err != nil {
-		return nil, 0
+		return 0, 0, 0, newParserError(i, "failed to convert to number", err)
 	}
 
 	if len(numStrs) == 1 {
-		return &quantifier{Min: occMin, Max: occMin}, 1 + endIdx
+		return occMin, occMin, 1 + endIdx, nil
 	}
 
 	occMax, err := strconv.Atoi(numStrs[1])
 	if err != nil {
-		return nil, 0
+		return 0, 0, 0, newParserError(i, "failed to convert to number", err)
 	}
 
-	// consume lastNum and }
-	return &quantifier{
-		Min: occMin,
-		Max: occMax,
-	}, 1 + endIdx
-}
-
-func parseChar(re string) (char, int) {
-	if len(re) == 0 {
-		return char{}, 0
-	}
-
-	if re[0] == '\\' {
-		if len(re) >= 2 {
-			c := re[1]
-			re = re[2:]
-			q, cons := parseQuantifier(re)
-			return char{Char: c, Quantifier: q}, 2 + cons
-		}
-		return char{}, 0
-	}
-
-	// don't consume non-escaped meta characters
-	switch re[0] {
-	case '^', '$':
-		// these don't work with quantifiers
-		return char{Char: re[0]}, 1
-	case '(', ')', '{', '}', '[', ']', '|', '?', '+', '*':
-		return char{}, 0
-	}
-
-	c := re[0]
-	re = re[1:]
-	q, cons := parseQuantifier(re)
-	return char{Char: c, Quantifier: q}, 1 + cons
+	return occMin, occMax, 1 + endIdx, nil
 }
