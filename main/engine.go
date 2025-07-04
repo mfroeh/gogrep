@@ -120,23 +120,21 @@ func (n *node) match(in string, i, r int) (int, bool) {
 	return i, false
 }
 
-func (n *node) collectSubmatches(in string, submatches []string) []string {
+func (n *node) collectSubmatches(in string, submatches *[]Submatch) {
 	if n == nil {
-		return submatches
+		return
 	}
 
 	switch s := n.state.(type) {
 	case *groupState:
-		submatches = append(submatches, in[s.matchStart:s.matchEnd])
-		submatches = s.firstChild.collectSubmatches(in, submatches)
+		*submatches = append(*submatches, Submatch{s.matchStart, in[s.matchStart:s.matchEnd]})
+		s.firstChild.collectSubmatches(in, submatches)
 	case *choiceState:
 		for _, c := range s.choices {
-			submatches = c.collectSubmatches(in, submatches)
+			c.collectSubmatches(in, submatches)
 		}
 	}
-	submatches = n.next.collectSubmatches(in, submatches)
-
-	return submatches
+	n.next.collectSubmatches(in, submatches)
 }
 
 type charRange struct {

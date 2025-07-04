@@ -7,7 +7,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// not really a unit test, relies on correct parsing
 func TestFindSubmatch(t *testing.T) {
 	tests := map[string]struct {
 		givenStrings []string
@@ -186,11 +185,16 @@ func TestFindSubmatch(t *testing.T) {
 
 			gotResults := make([]combination, len(tt.givenStrings))
 			for i, s := range tt.givenStrings {
-				gotSubmatches, gotErr := FindSubmatch(tt.givenRe, s)
+				re, gotErr := Compile(tt.givenRe)
 				if gotErr != nil {
-					t.Fatalf("our Match: %v", gotErr)
+					t.Fatalf("our Compile: %v", gotErr)
 				}
-				gotResults[i] = combination{tt.givenRe, s, gotSubmatches, gotErr}
+				gotSubmatches := re.FindSubmatch(s)
+				var gotSubmatchStrings []string
+				for _, s := range gotSubmatches {
+					gotSubmatchStrings = append(gotSubmatchStrings, s.Str)
+				}
+				gotResults[i] = combination{tt.givenRe, s, gotSubmatchStrings, gotErr}
 			}
 
 			wantResults := make([]combination, len(tt.givenStrings))
