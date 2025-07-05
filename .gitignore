@@ -1,3 +1,5 @@
 .direnv
 .idea
 result
+# we vendor packages, since it is required by buildGoModule to make the derivation reproducible
+vendor
