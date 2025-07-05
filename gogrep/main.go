@@ -95,6 +95,16 @@ func recursivelySearchDir(path string, re *regex.Regex) error {
 			return nil
 		}
 
+		// ignore executables
+		info, err = os.Stat(path)
+		if err != nil {
+			return err
+		}
+		isExecutable := (info.Mode()&fs.ModePerm)&0111 != 0
+		if isExecutable {
+			return nil
+		}
+
 		return searchFile(path, re)
 	})
 

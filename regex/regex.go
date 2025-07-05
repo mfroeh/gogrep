@@ -1,8 +1,8 @@
 package regex
 
 // missing and I want to add:
-// build a small GREP tool on top of this library
-// multiline support (in particular with $)
+// support for PERL character groups and escape character (e.g. \n and \s) inside brackets
+// proper multiline support (right now, no guarantee that it works as intended)
 // potentially: POSIX character sets in addition to perl ones
 // potentially: unicode support
 // potentially: more than just ERE support, e.g. non-greedy (lazy) quantifier variants like .+?
