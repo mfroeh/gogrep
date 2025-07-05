@@ -1,12 +1,8 @@
-package main
+package regex
 
 import (
-	"fmt"
-	"os"
 	"slices"
 )
-
-const wildcardChar = 0
 
 type charState struct {
 	char byte
@@ -37,7 +33,7 @@ type node struct {
 
 func (n *node) match(in string, i, r int) (int, bool) {
 	if n != nil {
-		fmt.Fprintf(os.Stdout, "%s, %s, %d, %d\n", in, n.str, i, r)
+		//fmt.Fprintf(os.Stdout, "%s, %s, %d, %d\n", in, n.str, i, r)
 	}
 
 	if n == nil {
@@ -55,7 +51,7 @@ func (n *node) match(in string, i, r int) (int, bool) {
 			return n.next.match(in, i, 0)
 		}
 
-		if in[i] == s.char || s.char == wildcardChar {
+		if in[i] == s.char {
 			j++
 			matchFound = true
 		}
@@ -127,7 +123,7 @@ func (n *node) collectSubmatches(in string, submatches *[]Submatch) {
 
 	switch s := n.state.(type) {
 	case *groupState:
-		*submatches = append(*submatches, Submatch{s.matchStart, in[s.matchStart:s.matchEnd]})
+		*submatches = append(*submatches, Submatch{Offset: s.matchStart, Str: in[s.matchStart:s.matchEnd]})
 		s.firstChild.collectSubmatches(in, submatches)
 	case *choiceState:
 		for _, c := range s.choices {

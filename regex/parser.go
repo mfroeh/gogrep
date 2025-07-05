@@ -1,4 +1,4 @@
-package main
+package regex
 
 import (
 	"fmt"
@@ -181,6 +181,7 @@ func parseGroup(re string, i int) (*node, error) {
 }
 
 // todo: make this more sensible
+// todo: maybe also introduce POSIX character sets (e.g. [[:ascii:]abc] support)
 // [...] and [^...]
 func parseBracket(re string, i int) (*node, error) {
 	if i >= len(re) {
@@ -274,46 +275,85 @@ func parseChar(re string, i int) (*node, error) {
 		return nil, nil
 	}
 
-	if re[i] == '\\' {
-		if i+1 < len(re) {
-			mi, ma, cons, err := parseQuantifier(re, i+2)
-			if err != nil {
-				return nil, err
-			}
-			return &node{
-				state: &charState{char: re[i+1]},
-				mi:    mi,
-				ma:    ma,
-				str:   re[i : i+2+cons],
-			}, nil
+	if re[i] != '\\' {
+		// don't consume non-escaped meta characters
+		switch re[i] {
+		case '^', '$':
+			return nil, newParserError(i, "unexpected meta character", nil)
+		case '(', ')', '{', '}', '[', ']', '|', '?', '+', '*':
+			return nil, nil
 		}
-		return nil, newParserError(i, "unexpected EOF", nil)
+
+		mi, ma, cons, err := parseQuantifier(re, i+1)
+		if err != nil {
+			return nil, err
+		}
+
+		c := re[i]
+		node := &node{
+			state: &charState{char: c},
+			mi:    mi,
+			ma:    ma,
+			str:   re[i : i+1+cons],
+		}
+		// have to differentiate between literal '\.' and wildcard '.'
+		if re[i] == '.' {
+			node.state = &bracketState{
+				negate: true,
+				ranges: []charRange{{from: '\n', to: '\n'}},
+			}
+		}
+		return node, nil
 	}
 
-	// don't consume non-escaped meta characters
-	switch re[i] {
-	case '^', '$':
-		return nil, newParserError(i, "unexpected meta character", nil)
-	case '(', ')', '{', '}', '[', ']', '|', '?', '+', '*':
-		return nil, nil
-	}
+	// if re[i] == '\'
+	if i+1 < len(re) {
+		mi, ma, cons, err := parseQuantifier(re, i+2)
+		if err != nil {
+			return nil, err
+		}
+		c := re[i+1]
 
-	mi, ma, cons, err := parseQuantifier(re, i+1)
-	if err != nil {
-		return nil, err
-	}
+		node := &node{
+			state: &charState{char: c},
+			mi:    mi,
+			ma:    ma,
+			str:   re[i : i+2+cons],
+		}
 
-	// have to differentiate between literal '\.' and wildcard '.'
-	c := re[i]
-	if re[i] == '.' {
-		c = wildcardChar
+		// perl character classes (ASCII only)
+		switch c {
+		// whitespace
+		case 's', 'S':
+			node.state = &bracketState{
+				negate: c == 'S',
+				ranges: []charRange{
+					{from: ' ', to: ' '},
+					{from: '\t', to: '\t'},
+					{from: '\n', to: '\n'},
+					{from: '\f', to: '\f'},
+					{from: '\r', to: '\r'},
+				}}
+		case 'd', 'D':
+			node.state = &bracketState{
+				negate: c == 'D',
+				ranges: []charRange{{from: '0', to: '9'}},
+			}
+		case 'w', 'W':
+			node.state = &bracketState{
+				negate: c == 'W',
+				ranges: []charRange{
+					{from: '0', to: '9'},
+					{from: 'a', to: 'z'},
+					{from: 'A', to: 'Z'},
+					{from: '_', to: '_'},
+				},
+			}
+		}
+		return node, nil
 	}
-	return &node{
-		state: &charState{char: c},
-		mi:    mi,
-		ma:    ma,
-		str:   re[i : i+1+cons],
-	}, nil
+	return nil, newParserError(i, "unexpected EOF", nil)
+
 }
 
 // {m, n} and ? and * and +

@@ -1,4 +1,4 @@
-package main
+package regex
 
 //
 //func TestParse(t *testing.T) {

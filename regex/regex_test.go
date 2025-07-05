@@ -1,4 +1,4 @@
-package main
+package regex
 
 import (
 	"regexp"
@@ -50,125 +50,131 @@ func TestFindSubmatch(t *testing.T) {
 		"ere_complex_id_tag": {
 			givenRe: "^(ID|REF)(_?(ALPHA|BETA|[0-9]{2,4}))([_.-][A-Za-z]{3}|[0-9]+)*X{1,2}$",
 			givenStrings: []string{
-				"IDALPHAXX",                // Basic, no underscore, no repeated group
-				"REF_BETA_xyzX",            // Underscore, one repeated group with letters
-				"ID1234.5678X",             // Digits in inner choice, repeated group with dot and digits
-				"REF_ALPHA_abc.12_DEF.34X", // Multiple repeated groups of different types
-				"ID12XX",                   // Shortest valid for ID with 2 digits, X repeated
-				"REF_BETA_ghi_7890X",       // Multiple underscore separated groups
+				"IDALPHAXX",
+				"REF_BETA_xyzX",
+				"ID1234.5678X",
+				"REF_ALPHA_abc.12_DEF.34X",
+				"ID12XX",
+				"REF_BETA_ghi_7890X",
 			},
 		},
 		"ere_complex_path_segment": {
 			givenRe: `[A-Z][a-z]*(/[^0-9_.-]+|\.[0-9]+)*[A-Z]?`,
 			givenStrings: []string{
-				"Root",                                  // Basic, no optional segments
-				"Folder/sub/item.123.456",               // Mix of slash and dot segments
-				"MyPath.123/segment_xyz/another.999End", // Complex path with trailing capital
-				"A/b.1/c.2D",                            // More compact segments
-				"Name.1",                                // Basic with dot segment
-				"Name/Segment",                          // Basic with slash segment
-				"N",                                     // Shortest valid string
+				"Root",
+				"Folder/sub/item.123.456",
+				"MyPath.123/segment_xyz/another.999End",
+				"A/b.1/c.2D",
+				"Name.1",
+				"Name/Segment",
+				"N",
 			},
 		},
 		"ere_log_line_parser": {
 			givenRe: `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^]]+\])?`,
 			givenStrings: []string{
-				"10:00:00",                               // Basic timestamp only
-				"12:34:56_INFO My message",               // Timestamp, level, message
-				"01:02:03_ERROR Critical Error [ID:999]", // All parts present
-				"23:00:00 [MSG:Data here]",               // Timestamp, no level/message, structured part with non-bracket content
-				"05:05:05 Text only",                     // Timestamp, message only
-				"00:00:00_WARN",                          // Timestamp, level only
-				"11:11:11_INFO",                          // Timestamp, level only (another case)
-				"09:09:09 [ID:1]",                        // Timestamp, ID only (min ID)
-				"08:08:08 [MSG:Hello there, Gemini!]",    // Timestamp, MSG with more complex content
+				"10:00:00",
+				"12:34:56_INFO My message",
+				"01:02:03_ERROR Critical Error [ID:999]",
+				"23:00:00 [MSG:Data here]",
+				"05:05:05 Text only",
+				"00:00:00_WARN",
+				"11:11:11_INFO",
+				"09:09:09 [ID:1]",
+				"08:08:08 [MSG:Hello there, Gemini!]",
 			},
 		},
 		"ere_tricky_greedy_star": {
 			givenRe: `a.*b(c)?`,
 			givenStrings: []string{
-				"ab",        // Basic
-				"abc",       // Optional 'c' present
-				"axb",       // '.*' consumes 'x'
-				"axyzb",     // '.*' consumes 'xyz'
-				"axbyc",     // '.*' consumes 'xby', finding the last 'b'
-				"a.b",       // '.' matches '.'
-				"a.bc",      // '.' matches '.', 'c' present
-				"a_X_Y_b_c", // Longer string, `.*` consumes all until last `b`
+				"ab",
+				"abc",
+				"axb",
+				"axyzb",
+				"axbyc",
+				"a.b",
+				"a.bc",
+				"a_X_Y_b_c",
 			},
 		},
 		"ere_tricky_alternation_priority": {
 			givenRe: `(aa|a)b+`,
 			givenStrings: []string{
-				"aab",    // `aa` takes precedence
-				"baaabb", // `aa` takes precedence
-				"ab",     // `a` is chosen
-				"abbb",   // `a` is chosen
+				"aab",
+				"baaabb",
+				"ab",
+				"abbb",
 				"aaabbbb",
 			},
 		},
 		"ere_tricky_negated_star_optional": {
 			givenRe: `x([^y]*)y?`,
 			givenStrings: []string{
-				"x",       // Shortest valid (no `[^y]*`, no `y?`)
-				"xy",      // Shortest with `y`
-				"xabc",    // `[^y]*` consumes `abc`
-				"xabcy",   // `[^y]*` consumes `abc`, `y?` consumes `y`
-				"xzzzz",   // `[^y]*` consumes all `z`
-				"x_1_2_3", // Non-'y' characters
-				"x.!",     // Non-'y' special characters
+				"x",
+				"xy",
+				"xabc",
+				"xabcy",
+				"xzzzz",
+				"x_1_2_3",
+				"x.!",
 			},
 		},
 		"ere_tricky_literal_dot": {
 			givenRe: `([.]|[a-z])\.?`,
 			givenStrings: []string{
-				//".",  // Matches `[.]`
-				//"a",  // Matches `[a-z]`
-				"a.", // Matches `[a-z]` then `\.?`
-				"..", // Matches `[.]` then `\.?`
-				"z.", // Matches `[a-z]` then `\.?`
-				"y",  // Matches `[a-z]`
+				//".",
+				//"a",
+				"a.",
+				"..",
+				"z.",
+				"y",
 			},
 		},
 		"ere_anchor_strict_enum": {
 			givenRe: `^(YES|NO)$`,
 			givenStrings: []string{
-				"YES", // Exact match
-				"NO",  // Exact match
+				"YES",
+				"NO",
 			},
 		},
 		"ere_anchor_optional_ends": {
 			givenRe: `^A?[0-9]+Z?$`,
 			givenStrings: []string{
-				"123",   // Only core digits
-				"A123",  // Leading optional 'A'
-				"123Z",  // Trailing optional 'Z'
-				"A123Z", // Both optional parts
-				"A0Z",   // Single digit case
+				"123",
+				"A123",
+				"123Z",
+				"A123Z",
+				"A0Z",
 			},
 		},
 		"ere_anchor_any_between": {
 			givenRe: `^X.*Y$`,
 			givenStrings: []string{
-				"XY",         // Minimum match (.* matches empty string)
-				"X_Y",        // Any single character between
-				"XabcY",      // Multiple characters between
-				"X123_abc_Y", // Diverse characters between
-				"X.Y",        // Dot metacharacter matching
-				"X     Y",    // Spaces between
+				"XY",
+				"X_Y",
+				"XabcY",
+				"X123_abc_Y",
+				"X.Y",
+				"X     Y",
 			},
 		},
 		"ere_anchor_negated_full_string": {
 			givenRe: `^[^0-9]+$`,
 			givenStrings: []string{
-				"abc",             // All letters
-				"ABC",             // All uppercase
-				"!@#$",            // All special chars
-				"abc!@#$",         // Mix of letters and special chars
-				"Spaces and tabs", // With spaces
-				"A",               // Single char
-				"0AA",             // should not match (does not start with 0)
-				"ABC0",            // should not match (does not end with [^0-9])
+				"abc",
+				"ABC",
+				"!@#$",
+				"abc!@#$",
+				"Spaces and tabs",
+				"A",
+				"0AA",
+				"ABC0",
+			},
+		},
+		"capture empty groups": {
+			givenRe: `(a)?(b)?c`,
+			givenStrings: []string{
+				"ac", "bc", "c",
 			},
 		},
 	}
@@ -247,6 +253,77 @@ func TestReplace(t *testing.T) {
 
 			// then
 			if d := cmp.Diff(tt.wantReplaced, gotReplaced); d != "" {
+				t.Errorf("got diff (-want +got):\n%s", d)
+			}
+		})
+	}
+}
+
+func TestFindAllSubmatches(t *testing.T) {
+	tests := map[string]struct {
+		givenRe        string
+		givenString    string
+		wantSubmatches [][]Submatch
+	}{
+
+		"happy bananas": {
+			givenRe:     "ba(.{0,2})na",
+			givenString: "anbananaortwobananasbaxana",
+		},
+		"multiline - dotall and groups": {
+			givenRe: `BEGIN\n(.*)\nEND`,
+			givenString: `Some preamble
+BEGIN
+  Line 1 of content
+  Line 2 of content
+END
+Some postamble`,
+		},
+		"nested groups - json like structure": {
+			givenRe:     `\{\s*"id":\s*(\d+),\s*"data":\s*"([^"]*)"\s*\}`,
+			givenString: `Before {"id": 123, "data": "hello"} after {"id": 456, "data": "world"} end`,
+		},
+		"nested groups - path segments": {
+			givenRe:     `(/(\w+))+`,
+			givenString: `/usr/local/bin/my_app /var/log/app.log`,
+		},
+		"complex nested groups with different character sets": {
+			givenRe:     `\[(\w+):(<([^>]+)>)?\]`,
+			givenString: `[Config: <Setting1>] [Type: <Boolean>] [Name: ]`,
+		},
+		// TODO: works fine for single submatches, breaks when searching for all for multiple
+		//"capture empty groups": {
+		//	givenRe:     `(a)?(b)?c`,
+		//	givenString: `abc ac bc c`,
+		//},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			// when
+			re, gotErr := Compile(tt.givenRe)
+			if gotErr != nil {
+				t.Fatalf("our Compile: %v", gotErr)
+			}
+			gotSubmatches := re.FindAllSubmatches(tt.givenString, -1)
+
+			var gotSubmatchesStrings [][]string
+			for _, match := range gotSubmatches {
+				var submatchStrings []string
+				for _, sm := range match {
+					submatchStrings = append(submatchStrings, sm.Str)
+				}
+				gotSubmatchesStrings = append(gotSubmatchesStrings, submatchStrings)
+			}
+
+			goRe, err := regexp.Compile(tt.givenRe)
+			if err != nil {
+				t.Fatalf("golang Compile: %v", err)
+			}
+			wantMatchesStrings := goRe.FindAllStringSubmatch(tt.givenString, -1)
+
+			// then
+			if d := cmp.Diff(wantMatchesStrings, gotSubmatchesStrings); d != "" {
 				t.Errorf("got diff (-want +got):\n%s", d)
 			}
 		})
