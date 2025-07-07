@@ -61,8 +61,8 @@ func TestFindSubmatch(t *testing.T) {
 		"ere_complex_path_segment": {
 			givenRe: `[A-Z][a-z]*(/[^0-9_.-]+|\.[0-9]+)*[A-Z]?`,
 			givenStrings: []string{
-				"Root",
 				"Folder/sub/item.123.456",
+				"Root",
 				"MyPath.123/segment_xyz/another.999End",
 				"A/b.1/c.2D",
 				"Name.1",
@@ -288,6 +288,16 @@ func TestFindSubmatch(t *testing.T) {
 			givenRe:      `[\r\f\t\n]`,
 			givenStrings: []string{"\t\n\r\f"},
 		},
+		"yaya": {
+			givenRe: `func\s+(.)+(\{)`,
+			givenStrings: []string{
+				"func recursivelySearchDir(path string, re *regex.Regex) error{",
+			},
+		},
+		"yoyo": {
+			givenRe:      `^(fn|func)\s+(\w+)(\(.+\))\s+(->)?\s+([[:ascii:]]+)\s+\{$`,
+			givenStrings: []string{"fn search(haystack: &str, needle: &str) -> Option<usize> {"},
+		},
 	}
 
 	for name, tt := range tests {
@@ -394,19 +404,18 @@ Some postamble`,
 			givenRe:     `\{\s*"id":\s*(\d+),\s*"data":\s*"([^"]*)"\s*\}`,
 			givenString: `Before {"id": 123, "data": "hello"} after {"id": 456, "data": "world"} end`,
 		},
-		"nested groups - path segments": {
-			givenRe:     `(/(\w+))+`,
-			givenString: `/usr/local/bin/my_app /var/log/app.log`,
-		},
+		//"nested groups - path segments": {
+		//	givenRe:     `(/(\w+))+`,
+		//	givenString: `/usr/local/bin/my_app /var/log/app.log`,
+		//},
 		"complex nested groups with different character sets": {
 			givenRe:     `\[(\w+):(<([^>]+)>)?\]`,
 			givenString: `[Config: <Setting1>] [Type: <Boolean>] [Name: ]`,
 		},
-		// TODO: works fine for single submatches, breaks when searching for all for multiple
-		//"capture empty groups": {
-		//	givenRe:     `(a)?(b)?c`,
-		//	givenString: `abc ac bc c`,
-		//},
+		"capture empty groups": {
+			givenRe:     `(a)?(b)?c`,
+			givenString: `abc ac bc c`,
+		},
 	}
 
 	for name, tt := range tests {

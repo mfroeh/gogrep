@@ -3,24 +3,25 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/alecthomas/kong"
-	"github.com/fatih/color"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/alecthomas/kong"
+	"github.com/fatih/color"
+
 	"github.com/mfroeh/gogrep/regex"
 )
 
 var submatchColors = []*color.Color{
-	color.New(color.FgRed),
-	color.New(color.FgGreen),
-	color.New(color.FgYellow),
-	color.New(color.FgBlue),
-	color.New(color.FgMagenta),
-	color.New(color.FgCyan),
+	color.New(color.FgRed).Add(color.Underline),
+	color.New(color.FgGreen).Add(color.Underline),
+	color.New(color.FgYellow).Add(color.Underline),
+	color.New(color.FgBlue).Add(color.Underline),
+	color.New(color.FgMagenta).Add(color.Underline),
+	color.New(color.FgCyan).Add(color.Underline),
 }
 
 var cli struct {

@@ -1,9 +1,7 @@
 package regex
 
 // missing and I want to add:
-// support for PERL character groups and escape character (e.g. \n and \s) inside brackets
-// proper multiline support (right now, no guarantee that it works as intended)
-// potentially: POSIX character sets in addition to perl ones
+// potentially: proper multiline support (right now, no guarantee that it works as intended)
 // potentially: unicode support
 // potentially: more than just ERE support, e.g. non-greedy (lazy) quantifier variants like .+?
 // potentially: look ahead/look behind
@@ -38,9 +36,10 @@ func Compile(re string) (Regex, error) {
 		re = re[:len(re)-1]
 	}
 
-	root, err := parseGroup("("+re+")", 0)
+	re = "(" + re + ")"
+	root, err := parseGroup(re, 0)
 	if err != nil {
-		return Regex{}, fmt.Errorf("failed to construct regex from %q: %w", "("+re+")", err)
+		return Regex{}, fmt.Errorf("failed to construct regex from %q: %w", re, err)
 	}
 	return Regex{
 		root:        root,
@@ -62,9 +61,9 @@ func (re Regex) FindAllSubmatches(s string, maxCount int) [][]Submatch {
 		}
 
 		_, match := re.root.match(s[i:], 0, 0)
+		var submatches []Submatch
+		re.root.collectSubmatches(s[i:], &submatches)
 		if match {
-			var submatches []Submatch
-			re.root.collectSubmatches(s[i:], &submatches)
 			for j := range submatches {
 				submatches[j].Offset += i
 			}

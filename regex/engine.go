@@ -19,8 +19,7 @@ type choiceState struct {
 
 type groupState struct {
 	firstChild *node
-	matchStart int
-	matchEnd   int
+	match      *Submatch
 }
 
 type node struct {
@@ -82,10 +81,6 @@ func (n *node) match(in string, i, r int) (int, bool) {
 		return i, false
 	case *groupState:
 		j, matchFound = s.firstChild.match(in, i, 0)
-		if matchFound {
-			s.matchStart = i
-			s.matchEnd = j
-		}
 	default:
 		panic("unexpected `state` type")
 	}
@@ -93,24 +88,43 @@ func (n *node) match(in string, i, r int) (int, bool) {
 	if matchFound {
 		// repeat current expression (greedy)
 		if r+1 < n.ma {
-			j, match := n.match(in, j, r+1)
+			end, match := n.match(in, j, r+1)
 			if match {
-				return j, match
+				if g, ok := n.state.(*groupState); ok && g.match == nil {
+					g.match = &Submatch{
+						Offset: i,
+						Str:    in[i:j],
+					}
+				}
+				return end, match
 			}
 		}
 
 		// advance to next expression
 		if r+1 >= n.mi {
-			j, match := n.next.match(in, j, 0)
+			end, match := n.next.match(in, j, 0)
 			if match {
-				return j, match
+				if g, ok := n.state.(*groupState); ok && g.match == nil {
+					g.match = &Submatch{
+						Offset: i,
+						Str:    in[i:j],
+					}
+				}
+				return end, match
 			}
 		}
 	}
 
 	// for ? and *, also jump to next expression once without consuming the current match
 	if n.mi == 0 && r == 0 {
-		return n.next.match(in, i, 0)
+		end, match := n.next.match(in, i, 0)
+		if g, ok := n.state.(*groupState); ok && g.match == nil {
+			g.match = &Submatch{
+				Offset: i,
+				Str:    "",
+			}
+		}
+		return end, match
 	}
 
 	return i, false
@@ -123,7 +137,11 @@ func (n *node) collectSubmatches(in string, submatches *[]Submatch) {
 
 	switch s := n.state.(type) {
 	case *groupState:
-		*submatches = append(*submatches, Submatch{Offset: s.matchStart, Str: in[s.matchStart:s.matchEnd]})
+		if s.match != nil {
+			*submatches = append(*submatches, *s.match)
+			// reset state so that we can reuse regex
+			s.match = nil
+		}
 		s.firstChild.collectSubmatches(in, submatches)
 	case *choiceState:
 		for _, c := range s.choices {

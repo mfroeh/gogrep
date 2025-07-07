@@ -102,7 +102,7 @@ func parseChoices(re string, i int) (*node, error) {
 			firstChild = child
 		}
 
-		if j <= len(re) && re[j] == '|' {
+		if j < len(re) && re[j] == '|' {
 			j += 1
 			choices = append(choices, firstChild)
 			firstChild = nil
