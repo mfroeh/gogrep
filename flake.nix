@@ -22,7 +22,7 @@
           vendorHash = "sha256-WIzP3PgNYzB13okvLvjKpgEp7dqxUytyquj9HY4vVIg=";
 
           # this becomes available in the implicitly defined devShell
-          nativeBuildInputs = [ pkgs.gopls ];
+          nativeBuildInputs = [ pkgs.gopls pkgs.delve ];
         };
       });
     };

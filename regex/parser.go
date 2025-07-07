@@ -3,9 +3,9 @@ package regex
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 type parserError struct {
@@ -155,7 +155,7 @@ func parseGroup(re string, i int) (*node, error) {
 	}
 
 	if j >= len(re) {
-		return nil, newParserError(j, "unexpected EOF", nil)
+		return nil, newParserError(j, "unexpected EOS", nil)
 	}
 
 	if re[j] != ')' {
@@ -180,9 +180,9 @@ func parseGroup(re string, i int) (*node, error) {
 	}, nil
 }
 
-// todo: make this more sensible
-// todo: maybe also introduce POSIX character sets (e.g. [[:ascii:]abc] support)
 // [...] and [^...]
+// this doesn't conform to POSIX, as we allow perl character sets, which mandates that '\' is not treated literally
+// inside of bracket expressions, make sure to escape '^', '-', ']' and '\'
 func parseBracket(re string, i int) (*node, error) {
 	if i >= len(re) {
 		return nil, nil
@@ -200,74 +200,229 @@ func parseBracket(re string, i int) (*node, error) {
 		j++
 	}
 
-	var chars []byte
-	var ranges []charRange
+	// todo: those characters that are metacharacters inside of [...], such as '-' or ']', are interpreted literally at the front or back of the expression
+	// we require them to be escape for now (not as pretty but semantically equivalent, just requires that you escape them)
+	// this means that we will assume that an unescaped ']' means that the bracket expression is over
 
-	var queue []byte
-	for j < len(re) {
-		r := re[j]
-		queue = append(queue, r)
-		j++
-
-		// reduce
-		if len(queue) == 3 {
-			if queue[1] == '-' &&
-				(unicode.IsLetter(rune(queue[0])) || unicode.IsDigit(rune(queue[0]))) &&
-				(unicode.IsLetter(rune(queue[2])) || unicode.IsDigit(rune(queue[2]))) {
-				charRange := charRange{
-					from: queue[0],
-					to:   r,
-				}
-				ranges = append(ranges, charRange)
-				queue = nil
+	var q []byte
+	ranges := make([]charRange, 0)
+	for j < len(re) && re[j] != ']' {
+		if re[j] == '[' {
+			rs, cons := parsePosixCharSet(re, j)
+			if rs == nil {
+				return nil, newParserError(j, "invalid POSIX character set", nil)
+			}
+			j += cons
+			ranges = append(ranges, rs...)
+		} else if re[j] == '\\' {
+			rs := parsePerlCharSet(re, j)
+			if rs != nil {
+				ranges = append(ranges, rs...)
 			} else {
-				chars = append(chars, queue[0])
-				queue = queue[1:]
+				c := escapedChar(re[j+1])
+				ranges = append(ranges, charRange{from: c, to: c})
 			}
-		}
-
-		// allow []...] or [^]...]
-		if r == ']' && !(j == i+2 || j == i+3 && negate) {
-			break
-		}
-	}
-
-	// reduce the rest of the queue to just chars
-	chars = append(chars, queue...)
-
-	// need to distinct []...] and [^]...] from the empty bracket []...
-	if chars[len(chars)-1] != ']' {
-		if chars[0] == ']' {
-			chars = nil
-			j = i + 2
-			if negate {
-				j++
-			}
+			j += 2
 		} else {
-			return nil, newParserError(i, "did not find closing ']'", nil)
+			q = append(q, re[j])
+			j += 1
+
+			// reduce
+			// todo: allow unescaped - at end and start
+			if len(q) == 3 {
+				if q[1] == '-' {
+					ranges = append(ranges, charRange{from: q[0], to: q[2]})
+					q = nil
+				} else {
+					ranges = append(ranges, charRange{from: q[0], to: q[0]})
+					q = q[1:]
+				}
+			}
 		}
-	} else {
-		chars = chars[:len(chars)-1]
 	}
 
-	for _, c := range chars {
+	if j >= len(re) || re[j] != ']' {
+		return nil, newParserError(j, "unexpected EOS", nil)
+	}
+
+	for _, c := range q {
 		ranges = append(ranges, charRange{from: c, to: c})
 	}
+
+	// pop off ]
+	j += 1
 
 	// see if there is a Quantifier
 	mi, ma, cons, err := parseQuantifier(re, j)
 	if err != nil {
 		return nil, err
 	}
+
 	return &node{
-		state: &bracketState{
-			negate: negate,
-			ranges: ranges,
-		},
-		mi:  mi,
-		ma:  ma,
-		str: re[i : j+cons],
+		state: &bracketState{negate: negate, ranges: ranges},
+		mi:    mi,
+		ma:    ma,
+		str:   re[i : j+cons],
 	}, nil
+}
+
+func parsePosixCharSet(re string, i int) ([]charRange, int) {
+	if i+8 < len(re) && re[i:i+8] == "[:word:]" {
+		return []charRange{
+			{from: 'a', to: 'z'},
+			{from: 'A', to: 'Z'},
+			{from: '0', to: '9'},
+			{from: '_', to: '_'},
+		}, 8
+	}
+
+	if i+9 < len(re) {
+		s := re[i : i+9]
+		switch s {
+		case "[:alnum:]":
+			return []charRange{
+				{from: 'a', to: 'z'},
+				{from: 'A', to: 'Z'},
+				{from: '0', to: '9'},
+			}, 9
+		case "[:alpha:]":
+			return []charRange{
+				{from: 'a', to: 'z'},
+				{from: 'A', to: 'Z'},
+			}, 9
+		case "[:ascii:]":
+			return []charRange{
+				{from: 0x0, to: 0x7f},
+			}, 9
+		case "[:blank:]":
+			return []charRange{
+				{from: ' ', to: ' '},
+				{from: '\t', to: '\t'},
+			}, 9
+		case "[:cntrl:]":
+			return []charRange{
+				{from: 0x0, to: 0x1f},
+				{from: 0x7f, to: 0x7f},
+			}, 9
+		case "[:digit:]":
+			return []charRange{
+				{from: '0', to: '9'},
+			}, 9
+		case "[:graph:]":
+			return []charRange{
+				{from: 0x21, to: 0x7e},
+			}, 9
+		case "[:lower:]":
+			return []charRange{
+				{from: 'a', to: 'z'},
+			}, 9
+		case "[:print:]":
+			return []charRange{
+				{from: 0x20, to: 0x7e},
+			}, 9
+		case "[:punct:]":
+			return []charRange{
+				{from: '[', to: '['},
+				{from: ']', to: ']'},
+				{from: '!', to: '!'},
+				{from: '"', to: '"'},
+				{from: '#', to: '#'},
+				{from: '$', to: '$'},
+				{from: '%', to: '%'},
+				{from: '&', to: '&'},
+				{from: '\'', to: '\''},
+				{from: '(', to: '('},
+				{from: ')', to: ')'},
+				{from: '*', to: '*'},
+				{from: '+', to: '+'},
+				{from: ',', to: ','},
+				{from: '.', to: '.'},
+				{from: '/', to: '/'},
+				{from: ':', to: ':'},
+				{from: ';', to: ';'},
+				{from: '<', to: '<'},
+				{from: '=', to: '='},
+				{from: '>', to: '>'},
+				{from: '?', to: '?'},
+				{from: '@', to: '@'},
+				{from: '\\', to: '\\'},
+				{from: '^', to: '^'},
+				{from: '_', to: '_'},
+				{from: '`', to: '`'},
+				{from: '{', to: '{'},
+				{from: '}', to: '}'},
+				{from: '|', to: '|'},
+				{from: '~', to: '~'},
+				{from: '-', to: '-'},
+			}, 9
+		case "[:space:]":
+			return []charRange{
+				{from: ' ', to: ' '},
+				{from: '\t', to: '\t'},
+				{from: '\r', to: '\r'},
+				{from: '\n', to: '\n'},
+				{from: '\v', to: '\v'},
+				{from: '\f', to: '\f'},
+			}, 9
+		case "[:upper:]":
+			return []charRange{
+				{from: 'A', to: 'Z'},
+			}, 9
+		}
+	}
+
+	if i+10 < len(re) && re[i:i+10] == "[:xdigit:]" {
+		return []charRange{
+			{from: 'A', to: 'F'},
+			{from: 'a', to: 'f'},
+			{from: '0', to: '9'},
+		}, 10
+	}
+
+	return nil, 0
+}
+
+// supported: \w, \W, \d, \D, \s, \S
+func parsePerlCharSet(re string, i int) []charRange {
+	if i+1 < len(re) {
+		s := re[i : i+2]
+		switch s {
+		case `\w`, `\W`:
+			ranges := []charRange{
+				{from: 'a', to: 'z'},
+				{from: 'A', to: 'Z'},
+				{from: '0', to: '9'},
+				{from: '_', to: '_'},
+			}
+			if s == `\W` {
+				return negateCharRanges(ranges)
+			}
+			return ranges
+		case `\d`, `\D`:
+			ranges := []charRange{
+				{from: '0', to: '9'},
+			}
+			if s == `\D` {
+				return negateCharRanges(ranges)
+			}
+			return ranges
+		case `\s`, `\S`:
+			ranges := []charRange{
+				{from: ' ', to: ' '},
+				{from: '\t', to: '\t'},
+				{from: '\r', to: '\r'},
+				{from: '\n', to: '\n'},
+				{from: '\v', to: '\v'},
+				{from: '\f', to: '\f'},
+			}
+			if s == `\S` {
+				return negateCharRanges(ranges)
+			}
+			return ranges
+		}
+	}
+
+	return nil
 }
 
 func parseChar(re string, i int) (*node, error) {
@@ -308,52 +463,27 @@ func parseChar(re string, i int) (*node, error) {
 
 	// if re[i] == '\'
 	if i+1 < len(re) {
+		// we always want to parse a quantifier
 		mi, ma, cons, err := parseQuantifier(re, i+2)
 		if err != nil {
 			return nil, err
 		}
-		c := re[i+1]
 
-		node := &node{
-			state: &charState{char: c},
+		// try to parse perl char set
+		charSet := parsePerlCharSet(re, i)
+		if charSet != nil {
+			return &node{state: &bracketState{ranges: charSet}, mi: mi, ma: ma, str: re[i : i+2+cons]}, nil
+		}
+
+		// otherwise treat as an escaped literal
+		return &node{
+			state: &charState{char: escapedChar(re[i+1])},
 			mi:    mi,
 			ma:    ma,
 			str:   re[i : i+2+cons],
-		}
-
-		// perl character classes (ASCII only)
-		switch c {
-		// whitespace
-		case 's', 'S':
-			node.state = &bracketState{
-				negate: c == 'S',
-				ranges: []charRange{
-					{from: ' ', to: ' '},
-					{from: '\t', to: '\t'},
-					{from: '\n', to: '\n'},
-					{from: '\f', to: '\f'},
-					{from: '\r', to: '\r'},
-				}}
-		case 'd', 'D':
-			node.state = &bracketState{
-				negate: c == 'D',
-				ranges: []charRange{{from: '0', to: '9'}},
-			}
-		case 'w', 'W':
-			node.state = &bracketState{
-				negate: c == 'W',
-				ranges: []charRange{
-					{from: '0', to: '9'},
-					{from: 'a', to: 'z'},
-					{from: 'A', to: 'Z'},
-					{from: '_', to: '_'},
-				},
-			}
-		}
-		return node, nil
+		}, nil
 	}
-	return nil, newParserError(i, "unexpected EOF", nil)
-
+	return nil, newParserError(i, "unexpected EOS", nil)
 }
 
 // {m, n} and ? and * and +
@@ -401,4 +531,48 @@ func parseQuantifier(re string, i int) (mi int, ma int, consumed int, err error)
 	}
 
 	return occMin, occMax, 1 + endIdx, nil
+}
+
+func negateCharRanges(ranges []charRange) []charRange {
+	newRanges := make([]charRange, len(ranges))
+
+	// assumes that intervals don't overlap
+	slices.SortFunc(ranges, func(a, b charRange) int {
+		return int(a.from) - int(b.from)
+	})
+
+	from := byte(0)
+	for _, r := range ranges {
+		newRanges = append(newRanges, charRange{from: from, to: r.from - 1})
+		from = r.to + 1
+	}
+	newRanges = append(newRanges, charRange{from: from, to: 0x7f})
+	return newRanges
+}
+
+// parse an ASCII escape sequence from c if there is one (e.g. '\t', '\n', ...)
+// if c isn't an ASCII escape sequence, return c
+// should be called if the character preceding c in the input string is '\'
+// https://en.wikipedia.org/wiki/Escape_sequences_in_C
+func escapedChar(c byte) byte {
+	switch c {
+	case 'a':
+		return '\a'
+	case 'b':
+		return '\b'
+	case 'e':
+		// funnily enough '\e' does not exist in golang :D
+		return 0xb
+	case 'f':
+		return '\f'
+	case 'n':
+		return '\n'
+	case 'r':
+		return '\r'
+	case 't':
+		return '\t'
+	case 'v':
+		return '\v'
+	}
+	return c
 }

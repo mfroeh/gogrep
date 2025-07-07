@@ -41,7 +41,7 @@ func TestFindSubmatch(t *testing.T) {
 			},
 		},
 		"happy complex 4": {
-			givenRe: `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^]]+\])?`,
+			givenRe: `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^\]]+\])?`,
 			givenStrings: []string{
 				"12:00:00_WARN Another message [ID:123]",
 				"01:02:03_INFO Detail here [MSG:Hello World]",
@@ -71,7 +71,7 @@ func TestFindSubmatch(t *testing.T) {
 			},
 		},
 		"ere_log_line_parser": {
-			givenRe: `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^]]+\])?`,
+			givenRe: `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^\]]+\])?`,
 			givenStrings: []string{
 				"10:00:00",
 				"12:34:56_INFO My message",
@@ -177,6 +177,117 @@ func TestFindSubmatch(t *testing.T) {
 				"ac", "bc", "c",
 			},
 		},
+		// Perl Character Classes
+		"perl_digit_char_set": {
+			givenRe:      `\d+`,
+			givenStrings: []string{"12345", "0", "987", "000"},
+		},
+		"perl_non_digit_char_set": {
+			givenRe:      `\D+`,
+			givenStrings: []string{"abc", "ABC", "hello world", "!@#$"},
+		},
+		"perl_whitespace_char_set": {
+			givenRe:      `\s+`,
+			givenStrings: []string{" ", "\t", "\n", " \t\n"},
+		},
+		"perl_non_whitespace_char_set": {
+			givenRe:      `\S+`,
+			givenStrings: []string{"hello", "WORLD", "123!", "no_spaces_here"},
+		},
+		"perl_word_char_set": {
+			givenRe:      `\w+`,
+			givenStrings: []string{"word", "Word123", "____"},
+		},
+		"perl_non_word_char_set": {
+			givenRe:      `\W+`,
+			givenStrings: []string{"!@#$", " ", "\t\n", ".-_"},
+		},
+		"perl_combination_d_S": {
+			givenRe:      `\d\S\d`,
+			givenStrings: []string{"1a2", "5!8", "0_9"},
+		},
+		"perl_combination_w_D": {
+			givenRe:      `\w\D\w`,
+			givenStrings: []string{"a-b", "1_2", "A!C"},
+		},
+		// POSIX Character Classes
+		"posix_alnum": {
+			givenRe:      `[[:alnum:]]+`,
+			givenStrings: []string{"abc123XYZ", "Hello_World", "123Test", "AlphaBravo"},
+		},
+		"posix_alpha": {
+			givenRe:      `[[:alpha:]]+`,
+			givenStrings: []string{"abcXYZ", "Hello", "AlphaBravo"},
+		},
+		"posix_blank": {
+			givenRe:      `[[:blank:]]+`,
+			givenStrings: []string{" ", "\t", "  \t "},
+		},
+		"posix_cntrl": {
+			givenRe:      `[[:cntrl:]]+`,
+			givenStrings: []string{"\x00", "\x1F", "\x7F"}, // Null, US, DEL
+		},
+		"posix_digit": {
+			givenRe:      `[[:digit:]]+`,
+			givenStrings: []string{"12345", "0", "987"},
+		},
+		"posix_graph": {
+			givenRe:      `[[:graph:]]+`,
+			givenStrings: []string{"!@#$ABCabc123", "NoSpacesHere!"},
+		},
+		"posix_lower": {
+			givenRe:      `[[:lower:]]+`,
+			givenStrings: []string{"abcdefg", "hello world"},
+		},
+		"posix_print": {
+			givenRe:      `[[:print:]]+`,
+			givenStrings: []string{"Printable text 123 !@#", "All visible characters"},
+		},
+		"posix_punct": {
+			givenRe:      `[[:punct:]]+`,
+			givenStrings: []string{"!@#$%^&*()", ".-_=+[]{};:'\",<>/?`~"},
+		},
+		"posix_space": {
+			givenRe:      `[[:space:]]+`,
+			givenStrings: []string{" ", "\t", "\n", "\r", "\f", "\v"},
+		},
+		"posix_upper": {
+			givenRe:      `[[:upper:]]+`,
+			givenStrings: []string{"ABCDEFG", "HELLO WORLD"},
+		},
+		"posix_word": {
+			givenRe:      `[[:word:]]+`,
+			givenStrings: []string{"word", "Word123", "____"}, // Equivalent to \w
+		},
+		"posix_xdigit": {
+			givenRe:      `[[:xdigit:]]+`,
+			givenStrings: []string{"0123456789ABCDEFabcdef"},
+		},
+		"posix_negated_alnum": {
+			givenRe:      `[^[:alnum:]]+`,
+			givenStrings: []string{"!@#$ ", ".-_", " "},
+		},
+		"posix_negated_alpha": {
+			givenRe:      `[^[:alpha:]]+`,
+			givenStrings: []string{"123!@#$", " ", ".-_"},
+		},
+		"posix_negated_digit": {
+			givenRe:      `[^[:digit:]]+`,
+			givenStrings: []string{"abcABC!@#", ".-_ "},
+		},
+		"posix_combination_alpha_space": {
+			givenRe:      `[[:alpha:]][[:space:]][[:alpha:]]`,
+			givenStrings: []string{"a b", "X Y", "m\tn"},
+		},
+		"posix_combination_digit_punct": {
+			givenRe:      `[[:digit:]][[:punct:]][[:digit:]]`,
+			givenStrings: []string{"1!2", "5.8", "0-9"},
+		},
+		// correct escape sequence parsing
+		"escape_sequence_parsing": {
+			givenRe:      `[\r\f\t\n]`,
+			givenStrings: []string{"\t\n\r\f"},
+		},
 	}
 
 	for name, tt := range tests {
@@ -229,7 +340,7 @@ func TestReplace(t *testing.T) {
 		wantReplaced string
 	}{
 		"complex, many replace": {
-			givenRe:      `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^]]+\])?`,
+			givenRe:      `[0-9]{2}:[0-9]{2}:[0-9]{2}(_WARN|_INFO|_ERROR)? ([A-Za-z ]+)?(\[ID:[0-9]+\]|\[MSG:[^\]]+\])?`,
 			givenStr:     "01:02:03_ERROR Critical Error [ID:999]",
 			givenReplace: "I$3reversed$2them$1hihi$0",
 			wantReplaced: "I" + "[ID:999]" + "reversed" + "Critical Error " + "them" + "_ERROR" + "hihi" + "01:02:03_ERROR Critical Error [ID:999]",
