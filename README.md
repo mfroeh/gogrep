@@ -1,7 +1,7 @@
 # POSIX ERE regex engine
 This is just a toy project for better understanding regex.\
 The module implements a regex library, which uses a NFA like data structure with backtracking and a small binary in `gogrep` on top of it, which implements some of grep/ripgrep like functionality.
-
+![Demo](demo.gif)
 
 There is one major bug, which would require a full redesign: there is no possible backtracking, back to within a capture group, after it has been matched.\
 Due to the greedy by default nature of regex, this means that when quantifiers are used at the last element within a capture group, they will always be fully exhausted.\
