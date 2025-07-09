@@ -1,6 +1,6 @@
 # POSIX ERE regex engine
 This is just a toy project for better understanding regex.\
-The module implements a regex library, which uses a NDA like data structure with backtracking and a small binary in `gogrep` on top of it, which implements some of grep/ripgrep like functionality.\
+The module implements a regex library, which uses a NFA like data structure with backtracking and a small binary in `gogrep` on top of it, which implements some of grep/ripgrep like functionality.
 
 
 There is one major bug, which would require a full redesign: there is no possible backtracking, back to within a capture group, after it has been matched.\
